@@ -292,8 +292,8 @@ export default function App() {
     if (ov !== undefined && ov !== "") return ov;
     switch (key) {
       case "productName":
-      case "styleId":
       case "bookTitle":  return src.title;
+      case "styleId":    return src.sku && String(src.sku).trim() !== "" ? src.sku : src.title;
       case "price":      return src.price;
       case "mrp":        return src.mrp;
       case "defective": {
@@ -351,9 +351,28 @@ export default function App() {
 
       let xml = await zip.file(sheetPath).async("string");
 
+      // ── shared strings ──
+      // Meesho templates store text via the shared-string table (t="s"), and
+      // Google Sheets only renders that form (it shows inline strings as blank).
+      // So we append our text values to sharedStrings.xml and reference them by
+      // index, matching the template's own encoding.
+      const ssFile = zip.file("xl/sharedStrings.xml");
+      let ssXml = ssFile ? await ssFile.async("string") : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" uniqueCount="0"></sst>`;
+      let siCount = (ssXml.match(/<si>/g) || []).length;
+      const internCache = new Map();
+      const appended = [];
+      const intern = (str) => {
+        if (internCache.has(str)) return internCache.get(str);
+        const idx = siCount + appended.length;
+        internCache.set(str, idx);
+        appended.push(str);
+        return idx;
+      };
+
       const makeCell = (ref, value) => {
         if (typeof value === "number" && !isNaN(value)) return `<c r="${ref}"><v>${value}</v></c>`;
-        return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
+        const si = intern(String(value));
+        return `<c r="${ref}" t="s"><v>${si}</v></c>`;
       };
 
       preview.forEach((row, i) => {
@@ -378,6 +397,18 @@ export default function App() {
         xml = xml.replace(rowxml, newrow);
       });
 
+      // write appended strings back into sharedStrings.xml and fix the counts
+      if (appended.length) {
+        const newSi = appended.map((s) => `<si><t xml:space="preserve">${escapeXml(s)}</t></si>`).join("");
+        ssXml = ssXml.replace("</sst>", newSi + "</sst>");
+        const oldCount = parseInt((ssXml.match(/\bcount="(\d+)"/) || [0, "0"])[1], 10);
+        const oldUnique = parseInt((ssXml.match(/uniqueCount="(\d+)"/) || [0, "0"])[1], 10);
+        ssXml = ssXml.replace(/\bcount="\d+"/, `count="${oldCount + appended.length}"`);
+        if (/uniqueCount="\d+"/.test(ssXml))
+          ssXml = ssXml.replace(/uniqueCount="\d+"/, `uniqueCount="${oldUnique + appended.length}"`);
+        zip.file("xl/sharedStrings.xml", ssXml);
+      }
+
       zip.file(sheetPath, xml);
       const out = await zip.generateAsync({ type: "blob", compression: "DEFLATE",
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -395,7 +426,7 @@ export default function App() {
   };
 
   const ready = sourceRows.length > 0 && templateBuf && colMap;
-  const previewCols = ["productName","bookTitle","price","defective","mrp","netWeight","pagesField","image1","groupId"];
+  const previewCols = ["productName","styleId","bookTitle","price","defective","mrp","netWeight","pagesField","image1","groupId"];
   const mappedCount = colMap ? Object.keys(colMap).length : 0;
   const unmatched = colMap ? FIELDS.filter((f) => colMap[f.key] === undefined).map((f) => f.header) : [];
 
@@ -623,9 +654,10 @@ export default function App() {
                         {previewCols.map((k) => {
                           const f = FIELDS.find((x) => x.key === k);
                           const c = colMap?.[k];
+                          const label = k === "styleId" ? "SKU / Style ID" : f.header;
                           return (
                             <th key={k} style={S.th}>
-                              <span style={S.thLabel}>{f.header}</span>
+                              <span style={S.thLabel}>{label}</span>
                               {c !== undefined && <span style={S.colTag}>{colLetter(c)}</span>}
                             </th>
                           );
