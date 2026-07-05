@@ -21,6 +21,7 @@ import JSZip from "jszip";
 const FILL_SHEET_MATCH = "fill this";
 const HEADER_ROW = 3;       // row holding field names (1-indexed)
 const DATA_START_ROW = 5;   // first data row (1-indexed)
+const TITLE_MAX = 200;      // Meesho caps Product Name at 200 characters
 
 // Canonical fields → how each is filled, plus the header text to match in the
 // template. kind: input | default | rule | auto. Matching is fuzzy (lowercased,
@@ -102,6 +103,15 @@ const HEADER_ALIASES = {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+// Trim a title to at most `max` chars, cutting at a word boundary so it never
+// ends mid-word. Meesho rejects Product Names longer than 200 characters.
+const clampTitle = (s, max = TITLE_MAX) => {
+  const str = String(s ?? "").trim();
+  if (str.length <= max) return str;
+  const cut = str.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
+};
 const fieldName = (cellVal) => {
   // header cells are multi-line: "\n\nProduct Name\n\nPlease enter…" → "Product Name"
   const parts = String(cellVal ?? "").split("\n").map((p) => p.trim()).filter(Boolean);
@@ -291,7 +301,7 @@ export default function App() {
     const ov = overrides[rowIdx]?.[key];
     if (ov !== undefined && ov !== "") return ov;
     switch (key) {
-      case "productName":
+      case "productName": return clampTitle(src.title);
       case "bookTitle":  return src.title;
       case "styleId":    return src.sku && String(src.sku).trim() !== "" ? src.sku : src.title;
       case "price":      return src.price;
@@ -671,8 +681,9 @@ export default function App() {
                           {previewCols.map((k) => {
                             const editable = ["defective","netWeight","pagesField"].includes(k);
                             const isPages = k === "pagesField";
+                            const wasClamped = k === "productName" && String(sourceRows[i]?.title || "").length > TITLE_MAX;
                             return (
-                              <td key={k} style={S.td} title={String(row[k] ?? "")}>
+                              <td key={k} style={S.td} title={wasClamped ? `Original was ${String(sourceRows[i].title).length} chars — trimmed to ${TITLE_MAX}` : String(row[k] ?? "")}>
                                 {editable ? (
                                   isPages ? (
                                     <select style={S.cellInput} value={row[k] ?? ""} onChange={(e) => setOverride(i, k, e.target.value)}>
@@ -681,7 +692,12 @@ export default function App() {
                                   ) : (
                                     <input style={S.cellInput} value={row[k] ?? ""} onChange={(e) => setOverride(i, k, e.target.value)} />
                                   )
-                                ) : (<span style={S.cellText}>{String(row[k] ?? "")}</span>)}
+                                ) : (
+                                  <span style={S.cellText}>
+                                    {String(row[k] ?? "")}
+                                    {wasClamped && <span style={S.clampTag}>trimmed to {TITLE_MAX}</span>}
+                                  </span>
+                                )}
                               </td>
                             );
                           })}
@@ -957,6 +973,7 @@ const S = {
   td: { padding: "6px 9px", borderBottom: `1px solid ${line2}`, maxWidth: 230, verticalAlign: "middle" },
   tdNum: { textAlign: "center", padding: "6px 8px", borderBottom: `1px solid ${line2}`, color: slate2, fontFamily: mono, fontSize: 11.5 },
   cellText: { display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220, color: ink2 },
+  clampTag: { display: "inline-block", marginLeft: 6, fontSize: 9.5, fontFamily: mono, fontWeight: 600, color: amber, background: amberSoft, padding: "1px 5px", borderRadius: 4, verticalAlign: "middle" },
   cellInput: { border: `1px solid ${accentSoft}`, background: accentTint, borderRadius: 7, padding: "5px 8px", fontSize: 12.5, fontFamily: body, width: "100%", color: ink, minWidth: 90, transition: "border-color .12s, box-shadow .12s" },
 
   // export
