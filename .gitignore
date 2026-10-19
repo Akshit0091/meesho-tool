@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# generated upload files
+out/
+
+# Claude Code session worktrees
+.claude/worktrees/
