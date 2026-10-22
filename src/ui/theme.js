@@ -112,6 +112,10 @@ export const S = {
   panelBody: { padding: "18px" },
   panelNote: { fontSize: 11.5, color: slate, marginTop: 14, lineHeight: 1.55, marginBottom: 0 },
 
+  resetRow: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, marginBottom: 12 },
+  resetNote: { fontSize: 11.5, color: slate2 },
+  resetBtn: { background: "transparent", border: `1px solid ${line}`, color: ink2, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontFamily: body, fontWeight: 500, cursor: "pointer" },
+
   grid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 },
   grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 },
 

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { loadTemplate, colLetter } from "./lib/template.js";
 import { parseInput } from "./lib/input.js";
-import { FIELDS, DEFAULT_SETTINGS, TITLE_MAX, buildRow } from "./lib/fields.js";
+import { FIELDS, DEFAULT_SETTINGS, TITLE_MAX, buildRow, withTemplate } from "./lib/fields.js";
 import { fillTemplate } from "./lib/fill.js";
 import { CSS, S, amber } from "./ui/theme.js";
 
@@ -13,7 +13,7 @@ import { CSS, S, amber } from "./ui/theme.js";
 // scripts/fill.mjs drives the same modules from the command line.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STORE_KEY = "meeshify.settings.v2";
+const STORE_KEY = "meeshify.settings.v3";
 
 const loadSettings = () => {
   try {
@@ -105,10 +105,22 @@ export default function App() {
     return [...c];
   }, [rows, settings.weightSlabs]);
 
+  const effective = useMemo(() => withTemplate(settings, tpl), [settings, tpl]);
+  const fromFormula = effective.defectiveOffset !== settings.defectiveOffset;
+
   const preview = useMemo(
-    () => rows.map((r, i) => ({ ...buildRow(r, settings, i, tpl?.options ?? {}), ...(overrides[i] || {}) })),
-    [rows, settings, tpl, overrides]
+    () => rows.map((r, i) => ({ ...buildRow(r, effective, i, tpl?.options ?? {}), ...(overrides[i] || {}) })),
+    [rows, effective, tpl, overrides]
   );
+
+  const resetSettings = () => {
+    setSettings(DEFAULT_SETTINGS);
+    try {
+      localStorage.removeItem(STORE_KEY);
+    } catch {
+      /* nothing to clear */
+    }
+  };
 
   const setOverride = (rowIdx, key, value) =>
     setOverrides((o) => ({ ...o, [rowIdx]: { ...(o[rowIdx] || {}), [key]: value } }));
@@ -337,6 +349,11 @@ export default function App() {
               desc={tpl ? "Dropdowns are populated from your uploaded template." : "Upload a template to load its exact dropdown options."}
             />
 
+            <div style={S.resetRow}>
+              <span style={S.resetNote}>Settings are saved in this browser.</span>
+              <button style={S.resetBtn} onClick={resetSettings}>Reset to defaults</button>
+            </div>
+
             <Panel title="Pricing" accent badge={settings.priceColumn || settings.mrpColumn ? "by column" : "by header"}>
               <div style={S.grid3}>
                 <Field label="Meesho Price from" hint="Pick a computed column, or leave blank to use the Selling Price header">
@@ -349,10 +366,22 @@ export default function App() {
                 <Field label="MRP from" hint="Leave blank to use the MRP header">
                   <Select value={settings.mrpColumn} onChange={(v) => set("mrpColumn", v)} options={colOptions("— use 'MRP' column —", settings.mrpColumn)} />
                 </Field>
-                <Field label="Defective price" hint="Only used when the template doesn't compute it">
-                  <div style={S.inputAffix}>
+                <Field
+                  label="Defective price"
+                  hint={
+                    fromFormula
+                      ? "Read from this template's own formula — not editable"
+                      : "Meesho price minus this amount"
+                  }
+                >
+                  <div style={{ ...S.inputAffix, ...(fromFormula ? { opacity: 0.7 } : {}) }}>
                     <span style={S.affix}>− ₹</span>
-                    <input style={S.affixInput} value={settings.defectiveOffset} onChange={(e) => set("defectiveOffset", e.target.value)} />
+                    <input
+                      style={S.affixInput}
+                      value={effective.defectiveOffset}
+                      disabled={fromFormula}
+                      onChange={(e) => set("defectiveOffset", e.target.value)}
+                    />
                   </div>
                 </Field>
               </div>

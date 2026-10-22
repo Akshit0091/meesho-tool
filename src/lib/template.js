@@ -86,11 +86,17 @@ function readValidations(xml) {
 // every data row and treat any column holding a formula as off-limits.
 function readFormulaColumns(xml) {
   const cols = new Set();
+  const formulas = {}; // column letter → formula text from the first data row
   for (const m of xml.matchAll(/<c r="([A-Z]+)(\d+)"[^>]*>([\s\S]*?)<\/c>/g)) {
     if (+m[2] < DATA_START_ROW) continue;
-    if (m[3].includes("<f")) cols.add(m[1]);
+    if (!m[3].includes("<f")) continue;
+    cols.add(m[1]);
+    if (formulas[m[1]] === undefined) {
+      const f = (m[3].match(/<f[^>]*>([\s\S]*?)<\/f>/) || [])[1];
+      if (f) formulas[m[1]] = f.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
+    }
   }
-  return cols;
+  return { cols, formulas };
 }
 
 function existingRows(xml) {
@@ -167,7 +173,7 @@ export async function loadTemplate(bytes, fields) {
   const xml = await zip.file(sheetPath).async("string");
 
   const validations = readValidations(xml);
-  const formulaCols = readFormulaColumns(xml);
+  const { cols: formulaCols, formulas } = readFormulaColumns(xml);
   const rows = existingRows(xml);
 
   // Exact dropdown options, read from the range each list validation points at.
@@ -233,6 +239,7 @@ export async function loadTemplate(bytes, fields) {
     colMap,
     options,
     formulaCols,
+    formulas,
     validations,
     lastPhysicalRow,
     lastUsableRow,

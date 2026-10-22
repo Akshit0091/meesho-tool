@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadTemplate, colLetter } from "../src/lib/template.js";
 import { parseInput } from "../src/lib/input.js";
-import { FIELDS, DEFAULT_SETTINGS, buildRow } from "../src/lib/fields.js";
+import { FIELDS, DEFAULT_SETTINGS, buildRow, withTemplate } from "../src/lib/fields.js";
 import { fillTemplate } from "../src/lib/fill.js";
 
 const [templatePath, inputPath, outPath = "Meesho_Bulk_Upload_Filled.xlsx", settingsPath] = process.argv.slice(2);
@@ -37,7 +37,9 @@ if (tpl.unmatched.length) console.log(`unmatched: ${tpl.unmatched.join(", ")}`);
 console.log(`input    : ${path.basename(inputPath)} → ${rows.length} products\n`);
 
 // Show what the first product resolves to, so mistakes are visible before upload.
-const sample = buildRow(rows[0], settings, 0, tpl.options);
+// withTemplate folds in anything the template dictates, so this preview
+// matches what actually gets written.
+const sample = buildRow(rows[0], withTemplate(settings, tpl), 0, tpl.options);
 console.log("first product:");
 for (const f of FIELDS) {
   const ci = tpl.colMap[f.key];

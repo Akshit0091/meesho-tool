@@ -1,4 +1,4 @@
-import { norm } from "./template.js";
+import { norm, colLetter } from "./template.js";
 
 export const TITLE_MAX = 200; // Meesho caps Product Name at 200 characters
 
@@ -100,9 +100,9 @@ export const FIELDS = [
 // Tuned for CHIRAG BOOK CENTER's CBSE question-paper catalog.
 export const DEFAULT_SETTINGS = {
   // where prices come from in the input sheet — column letters beat header names
-  priceColumn: "P",
-  mrpColumn: "Q",
-  defectiveOffset: "13", // only used if the template doesn't compute it itself
+  priceColumn: "", // blank = match the "Selling Price" header
+  mrpColumn: "", //   blank = match the "MRP" header
+  defectiveOffset: "13", // overridden by the template's own formula when it has one
 
   // weight
   weightPerBook: "400",
@@ -154,6 +154,23 @@ export const DEFAULT_SETTINGS = {
   impAddr: "Not Required",
   impPin: "Not Required",
 };
+
+// Meesho computes the defective price itself, e.g. =IF(F5>13,F5-13,""). We
+// cache a value next to that formula, so the number we write has to be the
+// number the formula would produce — reading the constant out of the template
+// is the only way to guarantee that as templates change.
+export function offsetFromFormula(formula) {
+  const m = String(formula).match(/^IF\([A-Z]+\d+>(\d+(?:\.\d+)?),\s*[A-Z]+\d+-(\d+(?:\.\d+)?),\s*""\)$/);
+  return m && m[1] === m[2] ? m[1] : null;
+}
+
+// Settings with anything the loaded template dictates folded in.
+export function withTemplate(settings, tpl) {
+  const ci = tpl?.colMap?.defective;
+  if (ci === undefined) return settings;
+  const offset = offsetFromFormula(tpl.formulas?.[colLetter(ci)] ?? "");
+  return offset == null ? settings : { ...settings, defectiveOffset: offset };
+}
 
 const pick = (row, letter, fallback) => {
   if (letter && row.cells[letter] !== undefined) {

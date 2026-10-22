@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { DATA_START_ROW, colLetter, colIndex } from "./template.js";
-import { FIELDS, buildRow } from "./fields.js";
+import { FIELDS, buildRow, withTemplate } from "./fields.js";
 
 // Writes product values into the template WITHOUT rewriting the workbook.
 //
@@ -21,6 +21,7 @@ function escapeXml(s) {
  * @returns {{bytes: Uint8Array, stats: object}}
  */
 export async function fillTemplate(tpl, rows, settings, overrides = {}) {
+  const effective = withTemplate(settings, tpl);
   const zip = await JSZip.loadAsync(tpl.bytes);
   let xml = await zip.file(tpl.sheetPath).async("string");
 
@@ -74,7 +75,7 @@ export async function fillTemplate(tpl, rows, settings, overrides = {}) {
 
   for (let i = 0; i < used; i++) {
     const rownum = DATA_START_ROW + i;
-    const values = { ...buildRow(rows[i], settings, i, tpl.options), ...(overrides[i] || {}) };
+    const values = { ...buildRow(rows[i], effective, i, tpl.options), ...(overrides[i] || {}) };
 
     const rowRe = new RegExp(`<row r="${rownum}"[^>]*>([\\s\\S]*?)</row>|<row r="${rownum}"[^>]*/>`);
     const m = xml.match(rowRe);
